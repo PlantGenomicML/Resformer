@@ -15,7 +15,7 @@ import math
 
 warnings.filterwarnings('ignore')
 
-# ==================== 随机种子 ====================
+
 def set_seed(seed=42):
     random.seed(seed)
     np.random.seed(seed)
@@ -49,7 +49,7 @@ class GatedConv1d(nn.Module):
         return feat * gate
 
 class ResidualBlock(nn.Module):
-    """残差块，增强特征学习"""
+    
     def __init__(self, dim):
         super().__init__()
         self.net = nn.Sequential(
@@ -65,7 +65,7 @@ class ResidualBlock(nn.Module):
 
 
 class PositionalEncoding1D(nn.Module):
-    """1D位置编码，用于SNP序列"""
+    
 
     def __init__(self, d_model, max_len=20000):
         super().__init__()
@@ -91,7 +91,7 @@ class SNPEncoder(nn.Module):
             nn.BatchNorm1d(d_model),
             nn.GELU(),
         )
-        # 卷积输出长度
+        
         self.conv_out_len = ((snp_len + 2 * 3 - 7) // 2 + 1 + 2 * 2 - 5) // 2 + 1
 
         self.pos_encoder = PositionalEncoding1D(d_model, max_len=self.conv_out_len)
@@ -217,7 +217,7 @@ class RFNetWrapper(nn.Module):
             env = env + torch.randn_like(env) * 0.01
         return self.canet(snp, env)
 
-# ==================== 数据集 ====================
+
 class RFNetDataset(Dataset):
     def __init__(self, df, env_dict, env_scaler, geno_name2idx, device):
         self.df = df.reset_index(drop=True)
@@ -240,7 +240,7 @@ class RFNetDataset(Dataset):
         env_norm = torch.tensor(env_norm, dtype=torch.float32, device=self.device).squeeze(0)
         return env_norm, gene_idx, y
 
-# ==================== 数据加载函数 ====================
+
 def load_geno_tensor(path, device):
     df = pd.read_csv(path, index_col=0).round(5)
     geno_np = df.values
@@ -276,7 +276,7 @@ def filter_matched(pheno_df, geno_name2idx, env_dict):
     res = pheno_df.iloc[keep].reset_index(drop=True)
     return res
 
-# ==================== 表型标准化 ====================
+
 class PhenoNorm:
     def fit(self, df):
         self.m = df['Yield'].mean()
@@ -285,7 +285,6 @@ class PhenoNorm:
     def norm(self, v): return (v - self.m) / self.s
     def denorm(self, v): return v * self.s + self.m
 
-# ==================== 评估函数 ====================
 def eval_safe(model, loader, device):
     model.eval()
     preds, trues = [], []
@@ -306,7 +305,7 @@ def eval_safe(model, loader, device):
     rmse = np.sqrt(mse)
     return r, r2, mse, rmse, p, t
 
-# ==================== 早停类 ====================
+
 class EarlyStopping:
     def __init__(self, patience=50, min_delta=1e-5):
         self.patience = patience
@@ -327,7 +326,7 @@ class EarlyStopping:
             self.counter += 1
             return self.counter >= self.patience
 
-# ==================== 训练函数 ====================
+
 class Loss(nn.Module):
     def __init__(self):
         super().__init__()
@@ -360,7 +359,7 @@ def train(model, train_loader, test_loader, epochs, lr, device, patience=50):
 
         test_r, _, _, _, _, _ = eval_safe(model, test_loader, device)
         if early_stop.step(test_r, model, epoch):
-            print(f"🛑 早停 @ epoch {epoch + 1}, 最佳测试PCC={early_stop.best_score:.4f}")
+            print(f" @ epoch {epoch + 1}, test PCC={early_stop.best_score:.4f}")
             break
 
         if (epoch + 1) % 10 == 0:
@@ -374,7 +373,6 @@ def train(model, train_loader, test_loader, epochs, lr, device, patience=50):
         best_test_pcc = test_r
     return model, best_test_pcc
 
-# ==================== 十折交叉验证 ====================
 def kfold_cv(pheno_df, env_dict, env_scaler, geno_name2idx, geno_tensor, cfg, device, k=10):
     save_root = r"D:/dest/exgepdata/albation-pe"
     os.makedirs(save_root, exist_ok=True)
@@ -385,7 +383,7 @@ def kfold_cv(pheno_df, env_dict, env_scaler, geno_name2idx, geno_tensor, cfg, de
     for fold, (train_idx, test_idx) in enumerate(kf.split(pheno_df), 1):
         fold_start = time.time()
 
-        print(f"\n========== 第 {fold}/{k} 折 ==========")
+        print(f"\n========== {fold}/{k}  ==========")
 
         train_df = pheno_df.iloc[train_idx]
         test_df = pheno_df.iloc[test_idx]
@@ -417,14 +415,14 @@ def kfold_cv(pheno_df, env_dict, env_scaler, geno_name2idx, geno_tensor, cfg, de
         model, best_test_r = train(model, train_loader, test_loader, cfg['epochs'], cfg['lr'], device, cfg['patience'])
 
         torch.save(model.state_dict(), os.path.join(save_root, f"best_model_fold{fold}.pth"))
-        print(f"💾 最优模型已保存至: best_model_fold{fold}.pth")
+       
 
         r, r2, mse, rmse, p, t = eval_safe(model, test_loader, device)
         p = norm.denorm(p)
         t = norm.denorm(t)
 
         fold_time = time.time() - fold_start
-        print(f"✅ 第 {fold} 折 | 测试集 PCC={r:.4f} | R2={r2:.4f} | RMSE={rmse:.4f} | 耗时 {fold_time:.2f}s")
+        print(f" test PCC={r:.4f} | R2={r2:.4f} | RMSE={rmse:.4f} |  {fold_time:.2f}s")
         res.append({
             "Fold": fold,
             "test_pearson": round(r, 4),
@@ -441,22 +439,21 @@ def kfold_cv(pheno_df, env_dict, env_scaler, geno_name2idx, geno_tensor, cfg, de
         pred_df['Fold'] = fold
         all_preds.append(pred_df)
 
-    print(f"\n总耗时: {time.time() - total_start:.2f}s")
+    
     pd.DataFrame(res).to_csv(os.path.join(save_root, "kfold_results_model1.csv"), index=False)
     pd.concat(all_preds, ignore_index=True).to_csv(os.path.join(save_root, "kfold_predictions_model1.csv"), index=False)
-    print("✅ 序列化双向交叉注意力模型结果已保存至:", save_root)
+    
     return res
 
-# ==================== 主函数 ====================
+
 def main():
     set_seed(42)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print("使用设备:", device)
-
+    
     paths = {
-        "geno": "D:/ayc/data/EXGEP_22(处理)/genotype.csv",
-        "pheno": "D:/ayc/data/cleaned_phenotype1.csv",
-        "env": "D:/ayc/data/merged.csv"
+        "geno": "D:/data/genotype.csv",
+        "pheno": "D:/data/Pheno.csv",
+        "env": "D:/data/Soil.csv"
     }
 
     cfg = {
@@ -483,11 +480,10 @@ def main():
     res = kfold_cv(pheno_df, env_dict, env_scaler, geno_name2idx, geno_tensor, cfg, device, k=10)
     df = pd.DataFrame(res)
 
-    print("\n==================== 十折交叉验证汇总 ====================")
-    print(f"平均 PCC:   {df['test_pearson'].mean():.4f} ± {df['test_pearson'].std():.4f}")
-    print(f"平均 R2:    {df['test_r2'].mean():.4f} ± {df['test_r2'].std():.4f}")
-    print(f"平均 RMSE:  {df['test_rmse'].mean():.4f} ± {df['test_rmse'].std():.4f}")
-    print(f"平均每折耗时: {df['fold_time_sec'].mean():.2f} ± {df['fold_time_sec'].std():.2f} 秒")
+    
+    print(f"avg PCC:   {df['test_pearson'].mean():.4f} ± {df['test_pearson'].std():.4f}")
+    print(f"avg RMSE:  {df['test_rmse'].mean():.4f} ± {df['test_rmse'].std():.4f}")
+ 
 
 if __name__ == "__main__":
     main()
